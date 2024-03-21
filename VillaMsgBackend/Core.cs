@@ -17,6 +17,8 @@ namespace VillaMsgBackend
 {
 	internal static class Core
 	{
+		public static List<string> types = new();
+
 		public static DateTime standTimeEpoch = new DateTime(2020, 8, 1, 0, 12, 28);
 		public static Dictionary<RoomFeature, RoomInstance> RoomInstance { get; private set; } = new();
 
@@ -100,13 +102,15 @@ namespace VillaMsgBackend
 							string lightcontent = "7B" + tmpRes.Item1 + "7D";
 							hexString = tmpRes.Item2;
 							var content_json = Encoding.Default.GetString(FromHex(lightcontent));
-							msgInstance.MsgContent = JsonConvert.DeserializeObject(content_json);
+							msgInstance.MsgContent = JsonConvert.DeserializeObject<MsgContentObject>(content_json);
 							//msgInstance.MsgContentObject = JsonConvert.DeserializeObject<MsgContentObject>(content_json);
 
+							if (!types.Any(q => q == msgInstance.MsgType)) { types.Add(msgInstance.MsgType);Logger.Log ($"{msgInstance.MsgType}\n{content_json}"); }
+
 							//处理发言过的用户
-							if (!roomInstance.SpokenUser.Any(q => q.id == msgInstance.MsgContentObject.user.id))
+							if (!roomInstance.SpokenUser.Any(q => q.id == msgInstance.MsgContent.user.id))
 							{
-								roomInstance.SpokenUser.Add(msgInstance.MsgContentObject.user);
+								roomInstance.SpokenUser.Add(msgInstance.MsgContent.user);
 							}
 
 							//id
@@ -162,13 +166,13 @@ namespace VillaMsgBackend
 
 			foreach (var msgInstance in roomInstance.MsgInstance.Where(q => q.MsgType == "MHY:SYS:PinMessage"))
 			{
-				if (msgInstance.MsgContentObject.content.operation == "pin")
-					roomInstance.PinMsg.Add(roomInstance.MsgInstance.FirstOrDefault(q => q.MsgID == msgInstance.MsgContentObject.content.message_id));
+				if (msgInstance.MsgContent.content.operation == "pin")
+					roomInstance.PinMsg.Add(roomInstance.MsgInstance.FirstOrDefault(q => q.MsgID == msgInstance.MsgContent.content.message_id));
 				else
 				{
 					try
 					{
-						roomInstance.PinMsg.Remove(roomInstance.MsgInstance.FirstOrDefault(q => q.MsgID == msgInstance.MsgContentObject.content.message_id));
+						roomInstance.PinMsg.Remove(roomInstance.MsgInstance.FirstOrDefault(q => q.MsgID == msgInstance.MsgContent.content.message_id));
 					}
 					catch (Exception e)
 					{

@@ -31,9 +31,9 @@ namespace VillaMsgBackend.Api
 
 				try
 				{
-					if (id != "0" && q.MsgContentObject.user.id != id) return false;
+					if (id != "0" && q.MsgContent.user.id != id) return false;
 				//if(!(startTs<=q.MsgTime&&q.MsgTime<=endTs)) return false;
-					return q.MsgContentObject.content.text.Contains(msg);
+					return q.MsgContent.content.text.Contains(msg);
 				}
 				catch (Exception)
 				{
