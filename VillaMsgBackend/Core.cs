@@ -1,43 +1,67 @@
 ﻿using Microsoft.Data.Sqlite;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices.JavaScript;
 using System.Text;
 using System.Threading.Tasks;
+using Tool;
+using VillaMsgBackend.Api.Info;
+using VillaMsgBackend.Info;
 
 namespace VillaMsgBackend
 {
 	internal static class Core
 	{
-		public static string DatebasePath;
-		public static string villa_id;
-		public static string room_id;
+		public static DateTime standTimeEpoch = new DateTime(2020, 8, 1, 0, 12, 28);
+		public static Dictionary<RoomFeature, RoomInstance> RoomInstance { get; private set; } = new();
 
-		public static MsgList Msg;
-		public static void Init()
+		//public static Dictionary<string, MsgList> Msg = new();//{villa_id}_{room_id} : MsgList
+		public static int filesNum = 0;
+		public static int loadingNum = 0;
+
+
+		public static void Init(string filePath, string villa_id, string room_id, string room_name)
 		{
-			Msg = GetMsg(DatebasePath, villa_id, room_id);
-			Msg.msgType.Reverse();
-			Msg.msgContent.Reverse();
+			filesNum++;
+			var roomInstance = GetMsg(filePath, villa_id, room_id, room_name);
+			RoomFeature roomFeature = new(villa_id, room_id);
+			RoomInstance.Add(roomFeature, roomInstance);
+			loadingNum++;
+			Logger.Log($"{filePath}读取完毕 {loadingNum}/{filesNum}");
 		}
-		static MsgList GetMsg(string filePath, string villa_id, string room_id)
+		/// <summary>
+		/// 等待加载
+		/// </summary>
+		/// <returns></returns>
+		public async static Task WaitForLoading()
 		{
+			while (loadingNum != filesNum) ;
+			return;
+		}
+		static RoomInstance GetMsg(string filePath, string villa_id, string room_id, string room_name)
+		{
+			var roomInstance = new RoomInstance() { RoomName = room_name, MsgInstance = new() };
 
-			var connectString = new SqliteConnectionStringBuilder() { Mode = SqliteOpenMode.ReadWriteCreate, DataSource = $"{filePath}", Cache = SqliteCacheMode.Shared }.ToString();
+			var connectString = new SqliteConnectionStringBuilder() { Mode = SqliteOpenMode.ReadOnly, DataSource = $"{filePath}", Cache = SqliteCacheMode.Shared }.ToString();
 			var sqliteConnection = new SqliteConnection(connectString);
 			sqliteConnection.Open();
 
 			var command = sqliteConnection.CreateCommand();
 
-			command.CommandText = @"SELECT * FROM 'Msg' LIMIT 0,100000";
-
+			command.CommandText = @"SELECT * FROM 'Msg'";
 
 			using (var reader = command.ExecuteReader())
 			{
 				int index = -1;
-				var msgType = new List<string>();
-				var msgContent = new List<string>();
+				//var msgType = new List<string>();
+				//var msgContent = new List<string>();
+				//var msgID = new List<string>();//B0084A13<id>006A0070
+				//var msgTime = new List<string>();//5E7A5C<json>9A01
 				while (reader.Read())
 				{
 					index++;
@@ -45,55 +69,125 @@ namespace VillaMsgBackend
 					string time = reader.GetString(0);
 					string dataType = reader.GetString(1);
 					string content = reader.GetString(2);
+
 					if (dataType != "rawData") continue;
 					if (!content.StartsWith("61")) continue;
-					//Console.WriteLine(Encoding.Default.GetString(FromHex(content)));
 					var msgList = content.Split(StringToHex(room_id) + "0A").ToList();
 					for (int i = 0; i < msgList.Count; i++)
 					{
 						try
 						{
-							if (index == 1594)
+							if (msgList[i].Length <= 50) continue;
+
+							string hexString = msgList[i];
+							var tmpRes = ("", "");
+
+							var msgInstance = new MsgInstance();
+
+							//type
+							hexString = hexString.SpliteString(StringToHex(villa_id) + "22").Item2;
+							tmpRes = hexString.Substring(2).SpliteString("2A");
+							string lighttype = tmpRes.Item1;
+							hexString = tmpRes.Item2;
+
+							msgInstance.MsgType = Encoding.Default.GetString(FromHex(lighttype));
+
+
+							//content
+							hexString = hexString.SpliteString("7B").Item2;
+							tmpRes = hexString.SpliteString("7D30");
+
+							string lightcontent = "7B" + tmpRes.Item1 + "7D";
+							hexString = tmpRes.Item2;
+							var content_json = Encoding.Default.GetString(FromHex(lightcontent));
+							msgInstance.MsgContent = JsonConvert.DeserializeObject(content_json);
+							//msgInstance.MsgContentObject = JsonConvert.DeserializeObject<MsgContentObject>(content_json);
+
+							//处理发言过的用户
+							if (!roomInstance.SpokenUser.Any(q => q.id == msgInstance.MsgContentObject.user.id))
 							{
-								Console.Write("0");
+								roomInstance.SpokenUser.Add(msgInstance.MsgContentObject.user);
 							}
-							msgList[i] = msgList[i].Split(StringToHex(villa_id) + "22")[1];
-							string lighttype = msgList[i].Substring(2).Split("2A")[0];
-							msgType.Add(Encoding.Default.GetString(FromHex(lighttype)));
 
-							var spliteContent = msgList[i].Split("2A").ToList();
-							spliteContent.RemoveAt(0);
+							//id
+							hexString = hexString.SpliteString("4A13").Item2;
+							tmpRes = hexString.SpliteString("500");
 
-							var combineStr = String.Join("", spliteContent);
+							string id = tmpRes.Item1;
+							hexString = tmpRes.Item2;
+							msgInstance.MsgID = Encoding.Default.GetString(FromHex(id));
 
-							string lightcontent = combineStr.Substring(combineStr.IndexOf("7B")).Split("7D7D30")[0] + "7D7D";
-							msgContent.Add(Encoding.Default.GetString(FromHex(lightcontent)));
 
-							//Console.WriteLine(Encoding.Default.GetString(FromHex(msgType[i])));
-							//var json = JObject.Parse(msgContent[i]);
-							//if (string.IsNullOrEmpty((string?)json["content"]["target_user_id"])) continue;
-							//var path = $"./dby/{(string?)json["user"]["id"]}_to_{((string?)json["content"]["target_user_id"])}_{json["content"]["action_id"]}.gif";
-							//if (Path.Exists(path)) continue;
-							//var request = new HttpRequestMessage(HttpMethod.Get, ((string?)json["content"]["url"]));
-							//var res = await httpClient.SendAsync(request);
+							//time 
+							string time_json;
+							if (!hexString.Contains("7B22") || !hexString.Contains("7D9A"))
+							{
+								time_json = "7B7D";
 
-							//File.WriteAllBytes(path, await (res.Content.ReadAsByteArrayAsync()));
+							}
+							else
+							{
+								hexString = hexString.SpliteString("7B22").Item2;
+								tmpRes = hexString.SpliteString("7D9A");
 
+								time_json = "7B22" + tmpRes.Item1 + "7D";
+
+							}
+
+							try
+							{
+								msgInstance.MsgTime = ((ulong)JObject.Parse(Encoding.Default.GetString(FromHex(time_json)))["status"]["ts"]);
+							}
+							catch (Exception)
+							{
+
+								msgInstance.MsgTime = 0;
+							}
+
+							roomInstance.MsgInstance.Add(msgInstance);
 						}
 						catch (Exception e)
 						{
-							Console.WriteLine(e);
-							Console.WriteLine($"读取发生错误 index={index},msgListIndex={i}\ncontent={msgList[i]}");
+							Logger.LogError(e.Message);
+							Logger.LogError($"读取发生错误 index={index},msgListIndex={i}\ncontent={msgList[i]}");
 							continue;
 						}
 					}
 					// ...
 				}
-				return new MsgList() { msgContent = msgContent, msgType = msgType = msgType };
 			}
+
+			sqliteConnection.Close();
+			roomInstance.MsgInstance.Reverse();//倒序
+
+			foreach (var msgInstance in roomInstance.MsgInstance.Where(q => q.MsgType == "MHY:SYS:PinMessage"))
+			{
+				if (msgInstance.MsgContentObject.content.operation == "pin")
+					roomInstance.PinMsg.Add(roomInstance.MsgInstance.FirstOrDefault(q => q.MsgID == msgInstance.MsgContentObject.content.message_id));
+				else
+				{
+					try
+					{
+						roomInstance.PinMsg.Remove(roomInstance.MsgInstance.FirstOrDefault(q => q.MsgID == msgInstance.MsgContentObject.content.message_id));
+					}
+					catch (Exception e)
+					{
+						Logger.LogError($"删除置顶信息失败{e}");
+					}
+				}
+				if (roomInstance.PinMsg.Count >= 1 && roomInstance.PinMsg[roomInstance.PinMsg.Count - 1] == null)
+				{
+					roomInstance.PinMsg.RemoveAt(roomInstance.PinMsg.Count - 1);
+				}
+			}
+
+			return roomInstance;
 		}
-
-
+		/// <summary>
+		/// hex to bytes
+		/// </summary>
+		/// <param name="hex"></param>
+		/// <returns></returns>
 		static byte[] FromHex(string hex)
 		{
 			hex = hex.Replace("-", "");
@@ -104,23 +198,23 @@ namespace VillaMsgBackend
 			}
 			return raw;
 		}
-		static string StringToHex(string str)
+		/// <summary>
+		/// string to hex
+		/// </summary>
+		/// <param name="str"></param>
+		/// <returns></returns>
+		public static string StringToHex(string str)
 		{
 			return Convert.ToHexString(Encoding.Default.GetBytes(str)).Replace("-", "");
 		}
-	}
-	public class MsgList
-	{
-		public List<string> msgType;
-		public List<string> msgContent;
-		public MsgInstance this[int index]
+		public static (string, string) SpliteString(this string source, string splitStr)
 		{
-			get { return new MsgInstance() { msgType = msgType[index], msgContent = msgContent[index] }; }
+			var tmpStrList = new List<string>();
+			tmpStrList = source.Split(splitStr).ToList();
+			var a = tmpStrList[0];
+			tmpStrList.RemoveAt(0);
+			var b = string.Join(splitStr, tmpStrList);
+			return new(a, b);
 		}
-	}
-	public class MsgInstance
-	{
-		public string msgType;
-		public string msgContent;
 	}
 }

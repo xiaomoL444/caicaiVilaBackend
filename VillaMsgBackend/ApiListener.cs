@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
+using Tool;
 
 namespace VillaMsgBackend
 {
@@ -17,9 +18,18 @@ namespace VillaMsgBackend
 
 		static bool isListener = false;
 
+		static System.Timers.Timer timer;//定时重启伺服器
+
 		public static void Start()
 		{
+
+			int port = 3280; // 设置端口号
+			listener = new TcpListener(IPAddress.IPv6Any, port);
+
+			listener.Start();
+
 			isListener = true;
+			Console.WriteLine($"HTTP 服务已启动，监听端口：{port}");
 			while (isListener)
 			{
 				using (TcpClient client = listener.AcceptTcpClient())
@@ -53,13 +63,10 @@ namespace VillaMsgBackend
 					ApiList.Add((ApiInterface)api!);
 				}
 			}
-
-			int port = 328; // 设置端口号
-			listener = new TcpListener(IPAddress.Any, port);
-
-			listener.Start();
-
-			Console.WriteLine($"HTTP 服务已启动，监听端口：{port}");
+			timer = new System.Timers.Timer(3600 * 1000);
+			timer.Elapsed += (_, _) => { Logger.LogWarnning("伺服器定时重启"); Stop(); Start(); };
+			timer.Start();
+			Start();
 		}
 		static void HandleClient(TcpClient client)
 		{
@@ -75,7 +82,7 @@ namespace VillaMsgBackend
 				string httpMethod = tokens[0];
 				string httpUrl = tokens[1];
 
-				Console.Write(httpUrl);
+				Console.WriteLine(httpUrl);
 
 				if (httpMethod == "GET" || httpMethod == "POST")
 				{
@@ -108,12 +115,12 @@ namespace VillaMsgBackend
 			try
 			{
 				//匹配Api的接口
-				if (ApiList.Any(api => api.url == url && api.httpMethod == httpMethod))
+				if (ApiList.Any(api => "/dby" + api.url == url && api.httpMethod == httpMethod))
 				{
-					string fileContent = ApiList.First(api => api.url == url && api.httpMethod == httpMethod).GetContent(param);
+					string fileContent = ApiList.First(api => "/dby" + api.url == url && api.httpMethod == httpMethod).GetContent(param);
 
 					byte[] responseBytes = Encoding.UTF8.GetBytes($"HTTP/1.1 200 OK\nAccess-Control-Allow-Origin: *\n\n{fileContent}");
-					Console.Write($"{fileContent}");
+					//Console.Write($"{fileContent}");
 					stream.Write(responseBytes, 0, responseBytes.Length);
 				}
 			}

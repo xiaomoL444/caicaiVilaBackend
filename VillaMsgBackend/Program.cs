@@ -1,41 +1,41 @@
-﻿// See https://aka.ms/new-console-template for more information
-using Microsoft.Data.Sqlite;
-using System.Net;
-using System.Net.Sockets;
-using System.Runtime.InteropServices.JavaScript;
-using System.Text;
+﻿using System.Text.RegularExpressions;
+using Tool;
 using VillaMsgBackend;
 
-string DatebasePath;
-string villa_id;
-string room_id;
-#if !DEBUG
-Console.Write("输入文件路径:");
-DatebasePath =  Console.ReadLine();
-Console.Write("输入villa_id:");
-villa_id = Console.ReadLine();
-Console.Write("输入room_id:");
-room_id = Console.ReadLine();
-#else
-DatebasePath = @"E:\code\TryVillaWss\TryVillaWss\bin\Debug\net7.0\Msg\463_16885_.db";
-villa_id = "463";
-room_id = "16885";
-#endif
-if (!File.Exists(DatebasePath))
+var directoryPath = "./Msg/";
+if (!Directory.Exists(directoryPath))
 {
-	Console.WriteLine("文件不存在，按任意键退出程序");
-	return;
+	Directory.CreateDirectory(directoryPath);
 }
 
-Console.WriteLine("读取数据中");
-Core.villa_id = villa_id;
-Core.DatebasePath = DatebasePath;
-Core.room_id = room_id;
-Core.Init();
+var filesPath = Directory.GetFiles(directoryPath);
+
+Logger.Log("读取数据中");
+foreach (var file in filesPath)
+{
+	new Thread(() =>
+	{
+		try
+		{
+			Logger.Log($"尝试读取文件{file}");
+			var match = Regex.Match(file, "./Msg/([\\s\\S]*).db").Groups[1].Value;
+			string villa_id = match.Split("_")[0];
+			string room_id = match.Split("_")[1];
+			string room_name = match.Split("_")[2];
+			Core.Init(file, villa_id, room_id, room_name);
+		}
+		catch (Exception)
+		{
+			Logger.LogError($"Error: {file}");
+		}
+	}).Start();
+
+}
+while (Core.loadingNum != filesPath.Length) ;
+
 Console.WriteLine("完成");
-
+Console.WriteLine("伺服器启动");
 ApiListener.Start();
-
 Console.WriteLine("done");
 
 while (true) ;
