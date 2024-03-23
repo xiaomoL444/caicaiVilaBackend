@@ -20,13 +20,13 @@ public record MsgInstance
 	/// </summary>
 	//public string MsgContentJson;
 	/// <summary>
-	/// 被解析过后的消息物件（根类型）
+	/// 被解析过后的消息物件
 	/// </summary>
-	//public object MsgContentObject;
+	public MsgContentObject MsgContentObject;
 	/// <summary>
-	/// 消息正文（自定义类型）
+	/// 消息正文（根类型）
 	/// </summary>
-	public MsgContentObject MsgContent;
+	public object MsgContent;
 	/// <summary>
 	/// 消息ID
 	/// </summary>

@@ -6,6 +6,7 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using Tool;
+using System.IO;
 
 namespace VillaMsgBackend
 {
@@ -36,11 +37,14 @@ namespace VillaMsgBackend
 				{
 					try
 					{
+
 						HandleClient(client);
+
 					}
 					catch (Exception e)
 					{
-						Console.Write($"{e.Message} {e.StackTrace}");
+						Logger.Log($"{e.Message} {e.StackTrace} {e.Source}");
+						RespondWithError(client.GetStream(), HttpStatusCode.BadRequest, @"{""msg"":""error""}");
 					}
 				}
 			}
@@ -48,9 +52,9 @@ namespace VillaMsgBackend
 		public static void Stop()
 		{
 			isListener = false;
+
 			listener.Stop();
-		}
-		static ApiListener()
+		}		static ApiListener()
 		{
 			//Logger.loggerLevel = Logger.LoggerLevel.Log;
 
@@ -63,10 +67,10 @@ namespace VillaMsgBackend
 					ApiList.Add((ApiInterface)api!);
 				}
 			}
-			timer = new System.Timers.Timer(3600 * 1000);
-			timer.Elapsed += (_, _) => { Logger.LogWarnning("伺服器定时重启"); Stop(); Start(); };
-			timer.Start();
-			Start();
+			//timer = new System.Timers.Timer(3600 * 1000);
+			//timer.Elapsed += (_, _) => { Logger.LogWarnning("伺服器定时重启"); Stop(); Thread.Sleep(1 * 1000); Start(); };
+			//timer.Start();
+			//Start();
 		}
 		static void HandleClient(TcpClient client)
 		{
@@ -82,7 +86,7 @@ namespace VillaMsgBackend
 				string httpMethod = tokens[0];
 				string httpUrl = tokens[1];
 
-				Console.WriteLine(httpUrl);
+				Logger.Log(httpUrl);
 
 				if (httpMethod == "GET" || httpMethod == "POST")
 				{
@@ -126,7 +130,7 @@ namespace VillaMsgBackend
 			}
 			catch (Exception)
 			{
-				Console.Write("匹配失败");
+				Console.Write("匹配失败\n");
 			}
 
 		}

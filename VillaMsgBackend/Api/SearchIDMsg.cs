@@ -28,7 +28,7 @@ namespace VillaMsgBackend.Api
 			switch (msgInstance.MsgType)
 			{
 				case "MHY:Text":
-					var text = $"{msgInstance.MsgContent.user.name}: {msgInstance.MsgContent.content.text}";
+					var text = $"{msgInstance.MsgContentObject.user.name}: {msgInstance.MsgContentObject.content.text}";
 					int textMaxLength = 15;
 					if (text.Length > textMaxLength)
 					{

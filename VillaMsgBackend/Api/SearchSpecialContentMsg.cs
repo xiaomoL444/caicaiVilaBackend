@@ -26,14 +26,16 @@ namespace VillaMsgBackend.Api
 			string msg = HttpUtility.UrlDecode(@params["msg"]);
 			string id = @params["id"];
 
+			if (id == "0" && string.IsNullOrEmpty(msg)) return "[]";
+
 			List<SearchRsp> res = Core.RoomInstance[roomFeature].MsgInstance.Where(q =>
 			{
 
 				try
 				{
-					if (id != "0" && q.MsgContent.user.id != id) return false;
-				//if(!(startTs<=q.MsgTime&&q.MsgTime<=endTs)) return false;
-					return q.MsgContent.content.text.Contains(msg);
+					if (id != "0" && q.MsgContentObject.user.id != id) return false;
+					//if(!(startTs<=q.MsgTime&&q.MsgTime<=endTs)) return false;
+					return q.MsgContentObject.content.text.Contains(msg);
 				}
 				catch (Exception)
 				{
@@ -41,7 +43,7 @@ namespace VillaMsgBackend.Api
 					return false;
 				}
 
-			}).Select(q => new SearchRsp(roomFeature,q)).ToList();
+			}).Select(q => new SearchRsp(roomFeature, q)).ToList();
 			return JsonConvert.SerializeObject(res);
 		}
 	}
